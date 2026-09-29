@@ -14,11 +14,15 @@ web_environment: []
 corepack_enable: false
 hooks:
   pre-start:
-    - exec-host: cd plugin && composer install
+    # Create the mount parent as the host user; otherwise Docker creates it as root and WP-CLI cannot write plugins
+    - exec-host: mkdir -p wordpress/wp-content/plugins
   post-start:
+    - exec: '[ -f "$(pwd)/wordpress/wp-load.php" ] || wp core download --skip-content --path="$(pwd)/wordpress"'
     - exec: "[ -f \"$(pwd)/wordpress/wp-config.php\" ] || wp config create --dbname=db --dbuser=db --dbpass=db --dbhost=db --path=\"$(pwd)/wordpress\""
     - exec: wp core install --url="${DDEV_PRIMARY_URL}" --title="WordPress Site" --admin_user=admin --admin_password=admin --admin_email="admin@${DDEV_SITENAME}.ddev.site" --path="$(pwd)/wordpress"
     - exec: wp theme install twentytwentyfour --activate --path="$(pwd)/wordpress"
+    # Gravity Forms is commercial, so it installs only when GF_LICENSE_KEY is set in .ddev/.env
+    - exec: '[ -z "${GF_LICENSE_KEY}" ] || wp plugin is-installed gravityforms --path="$(pwd)/wordpress" || { wp plugin install gravityformscli --activate --path="$(pwd)/wordpress" && wp gf install --key="${GF_LICENSE_KEY}" --activate --path="$(pwd)/wordpress"; }'
     - exec: wp plugin activate "${DDEV_SITENAME}" --path="$(pwd)/wordpress"
 
 # Key features of DDEV's config.yaml:
