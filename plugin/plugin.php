@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: GF UTM Attribution
- * Description: Records UTM campaign attribution on every Gravity Forms entry.
- * Version: 1.0.0
+ * Description: Records UTM campaign attribution on every Gravity Forms submission.
+ * Version: 1.0.1
  * Author: Joseph Roberts
  * License: GPL-2.0-or-later
  **/
@@ -68,7 +68,8 @@ function capture_utm_entry_meta($key, $entry, $form)
 {
     // Gravity Forms calls this on entry edits as well as initial submissions.
     if (array_key_exists($key, $entry)) {
-        return $entry[$key];
+        // GF_Query loads a missing meta row as false, which gform_update_meta would store as '0'.
+        return $entry[$key] === false ? '' : $entry[$key];
     }
 
     $attribution = get_utm_session_attribution();
@@ -93,6 +94,19 @@ add_filter('gform_entry_meta', function ($entry_meta, $form_id) {
 
     return $entry_meta;
 }, 10, 2);
+
+// UTM values come from the visitor's cookie, and Gravity Forms only neutralises a leading '=' in CSV exports.
+add_filter('gform_export_field_value', function ($value, $form_id, $field_id, $entry) {
+    if (!array_key_exists($field_id, utm_entry_meta_labels()) || !is_string($value)) {
+        return $value;
+    }
+
+    if (in_array(substr($value, 0, 1), ['=', '+', '-', '@', "\t", "\r"], true)) {
+        return "'" . $value;
+    }
+
+    return $value;
+}, 10, 4);
 
 // Gravity Forms already replaces {entry:utm_source} from entry meta; this only lists the tags in the merge tag picker.
 add_filter('gform_custom_merge_tags', function ($merge_tags, $form_id, $fields, $element_id) {

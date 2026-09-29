@@ -1,6 +1,6 @@
 # GF UTM Attribution
 
-A WordPress plugin that records the visitor's UTM campaign (`utm_source`, `utm_medium`, `utm_campaign`, `utm_term`, `utm_content`) on every Gravity Forms entry, for every form. No settings.
+A WordPress plugin that records the visitor's UTM campaign (`utm_source`, `utm_medium`, `utm_campaign`, `utm_term`, `utm_content`) on every Gravity Forms submission, for every form. No settings.
 
 ## What it records and where it shows up
 
@@ -8,7 +8,7 @@ The five values are saved as Gravity Forms entry meta (labelled "UTM Source", "U
 
 - **Entries list columns**: add them with the column picker. They are not shown by default.
 - **Entry filters**: filter the entries list with *is*, *is not* or *contains*.
-- **CSV export**: listed alongside the form fields in Forms → Import/Export.
+- **CSV export**: listed alongside the form fields in Forms → Import/Export. Values starting with `=`, `+`, `-`, `@`, tab or carriage return get a leading `'` so spreadsheets don't run them as formulas (Gravity Forms itself only guards `=`).
 - **Add-on feed field mapping**: any add-on field map that isn't restricted to a field type offers them (`GFAddOn::get_field_map_choices`).
 
 Code can read the keys and labels from `GfUtmAttribution\utm_entry_meta_labels()`, and the values with `gform_get_meta($entry_id, 'utm_source')`.
@@ -16,6 +16,8 @@ Code can read the keys and labels from `GfUtmAttribution\utm_entry_meta_labels()
 ## Attribution model
 
 First touch per browser session. A small inline script in `<head>` stores the UTM parameters from the first tagged page in a session cookie called `gf_utm_attribution` (no expiry, `path=/`, `SameSite=Lax`, `Secure` on https). Later pages, tagged or not, never overwrite it. Values are trimmed and capped at 200 characters. A submission without the cookie stores empty values, and editing an entry keeps its original attribution.
+
+Submissions (form posts, AJAX, `GFAPI::submit_form`, REST `/submissions`) use the submitting request's cookie. Entries inserted directly (`GFAPI::add_entry`, the REST entries endpoint) aren't attributed.
 
 The script is only printed when Gravity Forms is active.
 
@@ -40,11 +42,13 @@ npm run test:e2e    # real browser against the ddev site; needs ddev running wit
 npm test            # both
 ```
 
-The e2e test creates its own form, page and entry, checks the entry meta and the notification email in Mailpit, and then deletes all of them.
+The e2e test runs twice, once with the form embedded with `ajax="false"` and once with `ajax="true"`, each in a fresh browser context. Each run creates its own form, page and entry, checks the entry meta and the notification email in Mailpit, and then deletes all of them. A separate check runs Gravity Forms' real CSV export line builder against formula-like UTM values.
+
+CI (`.github/workflows/ci.yml`) lints the PHP and runs the unit tests on every push to `master` and every pull request. The e2e test needs ddev and a Gravity Forms license, so it only runs locally.
 
 ## Releasing
 
 1. Bump `Version:` in `plugin/plugin.php` and commit.
-2. Tag and push with a plain semver tag (no `v` prefix): `git tag 1.0.1 && git push origin 1.0.1`.
+2. Tag and push with a plain semver tag matching that header (no `v` prefix): `git tag X.Y.Z && git push origin X.Y.Z`.
 
-`.github/workflows/release.yml` lints the PHP, runs the unit tests, builds `dist/gf-utm-attribution.zip` with `bin/build-release.sh`, and publishes a GitHub release with that zip attached. The build fails if the tag doesn't match the `Version:` header. To build locally, run `bin/build-release.sh 1.0.0`.
+For an `X.Y.Z` tag, CI runs the same lint and unit tests, then builds `dist/gf-utm-attribution.zip` with `bin/build-release.sh` and publishes a GitHub release with that zip attached. The build fails if the tag doesn't match the `Version:` header. To build locally, run `bin/build-release.sh X.Y.Z` with the current header version.

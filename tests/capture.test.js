@@ -10,6 +10,7 @@ function runtime(input = {}) {
   }));
 }
 
+const utmKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'];
 const head = runtime().head;
 const scripts = [...head.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g)].map(match => match[1]);
 
@@ -19,7 +20,7 @@ function visit(query, cookie = '') {
   Object.defineProperty(document, 'cookie', {
     get: () => cookie,
     set: value => {
-      assert(Buffer.byteLength(value) < 4096, 'Campaign cookie exceeds browser size limit');
+      assert(Buffer.byteLength(value) < 4096, `Campaign cookie is ${Buffer.byteLength(value)} bytes, over the browser size limit`);
       attributes = value;
       cookie = value.split(';')[0];
     },
@@ -57,16 +58,36 @@ const tests = [
     assert.deepStrictEqual(runtime({entry}).values, expected);
     assert.deepStrictEqual(runtime({entry, cookie: encodeURIComponent(JSON.stringify({utm_source: 'admin', utm_medium: 'admin'}))}).values, expected);
   }],
+  ['stores empty values, not "0", when an edited entry has no UTM meta rows', () => {
+    // Gravity Forms reloads the entry for an admin edit with every missing meta row set to false.
+    const entry = {id: 123, utm_source: false, utm_medium: false, utm_campaign: false, utm_term: false, utm_content: false};
+    const empty = {utm_source: '', utm_medium: '', utm_campaign: '', utm_term: '', utm_content: ''};
+    assert.deepStrictEqual(runtime({entry}).values, empty);
+    assert.deepStrictEqual(runtime({entry, cookie: encodeURIComponent(JSON.stringify({utm_source: 'admin'}))}).values, empty);
+    assert.strictEqual(runtime({entry: {id: 123, utm_content: '0'}}).values.utm_content, '0');
+  }],
   ['ignores malformed cookie input rather than breaking form processing', () => {
     for (const cookie of [null, 'not-json', [], {bad: 'cookie'}]) {
       assert(Object.values(runtime({cookie}).values).every(value => value === ''));
     }
   }],
   ['bounds encoded Unicode cookies and stores valid Unicode', () => {
-    const campaign = Object.fromEntries(['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'].map(key => [key, '\u4e2d'.repeat(200)]));
+    const campaign = Object.fromEntries(utmKeys.map(key => [key, '\u4e2d'.repeat(200)]));
     const cookie = visit('?' + new URLSearchParams(campaign)).cookie.split('=').slice(1).join('=');
     const values = runtime({cookie}).values;
     assert(Object.values(values).every(value => value.length > 0 && !value.includes('\ufffd')));
+  }],
+  ['bounds cookies of double quotes, which JSON escaping doubles', () => {
+    const campaign = Object.fromEntries(utmKeys.map(key => [key, '"'.repeat(200)]));
+    const cookie = visit('?' + new URLSearchParams(campaign)).cookie.split('=').slice(1).join('=');
+    const values = runtime({cookie}).values;
+    assert(Object.values(values).every(value => value.length > 0 && value === '"'.repeat(value.length)), JSON.stringify(values));
+  }],
+  ['bounds cookies of backslashes, which JSON escaping doubles', () => {
+    const campaign = Object.fromEntries(utmKeys.map(key => [key, '\\'.repeat(200)]));
+    const cookie = visit('?' + new URLSearchParams(campaign)).cookie.split('=').slice(1).join('=');
+    const values = runtime({cookie}).values;
+    assert(Object.values(values).every(value => value.length > 0 && value === '\\'.repeat(value.length)), JSON.stringify(values));
   }],
   ['prints no capture script when Gravity Forms is not active', () => {
     assert(scripts.length > 0, 'Capture script missing when Gravity Forms is active');

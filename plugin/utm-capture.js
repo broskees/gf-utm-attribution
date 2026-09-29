@@ -10,8 +10,8 @@
     if (!value || !value.trim()) return;
 
     const characters = Array.from(value.trim()).slice(0, 200);
-    // Budget encoded bytes per field so the complete cookie stays below 4 KB.
-    while (encodeURIComponent(characters.join('')).length > 600) characters.pop();
+    // Budget each field as stored (JSON-escaped, then URL-encoded) so the complete cookie stays below 4 KB.
+    while (encodeURIComponent(JSON.stringify(characters.join(''))).length > 600) characters.pop();
     campaign[parameter] = characters.join('');
   });
 
