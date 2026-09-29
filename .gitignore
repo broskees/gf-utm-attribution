@@ -1,3 +1,11 @@
-# composer
-plugin/vendor/
+# WordPress core, downloaded by ddev
 wordpress/
+
+# local secrets (Gravity Forms license key)
+.ddev/.env
+
+# release build output
+dist/
+
+# e2e test dependencies
+node_modules/

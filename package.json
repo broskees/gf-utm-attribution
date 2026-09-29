@@ -1,0 +1,12 @@
+{
+  "name": "gf-utm-attribution",
+  "private": true,
+  "scripts": {
+    "test:unit": "node tests/capture.test.js",
+    "test:e2e": "node tests/e2e.test.mjs",
+    "test": "npm run test:unit && npm run test:e2e"
+  },
+  "devDependencies": {
+    "playwright": "1.58.2"
+  }
+}

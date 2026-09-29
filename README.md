@@ -1,22 +1,50 @@
-# DDEV WP Plugin Boilerplate
+# GF UTM Attribution
 
-Plugin boilerplate with a DDEV WordPress local environment for plugin development! 
+A WordPress plugin that records the visitor's UTM campaign (`utm_source`, `utm_medium`, `utm_campaign`, `utm_term`, `utm_content`) on every Gravity Forms entry, for every form. No settings.
 
-## Getting Started
+## What it records and where it shows up
 
-Clone the boilerplate into your plugin directory. Make sure you replace `your-plugin-name` with the name of what you would like your plugin's directory to be named.
-`git clone https://github.com/broskees/ddev-wp-plugin-boilerplate.git your-plugin-name`
+The five values are saved as Gravity Forms entry meta (labelled "UTM Source", "UTM Medium", and so on), so they appear wherever Gravity Forms shows entry meta:
 
-Next navigate into your plugin directory.
-`cd your-plugin-name`
+- **Entries list columns**: add them with the column picker. They are not shown by default.
+- **Entry filters**: filter the entries list with *is*, *is not* or *contains*.
+- **CSV export**: listed alongside the form fields in Forms → Import/Export.
+- **Add-on feed field mapping**: any add-on field map that isn't restricted to a field type offers them (`GFAddOn::get_field_map_choices`).
 
-Before starting the ddev environment, you must set the name and description of your plugin in `plugin/composer.json`.
+Code can read the keys and labels from `GfUtmAttribution\utm_entry_meta_labels()`, and the values with `gform_get_meta($entry_id, 'utm_source')`.
 
-Start the ddev environment.
-`cd your-plugin-name && ddev start`
+## Attribution model
 
-You should now be able to access your WordPress site at `http://your-plugin-name.ddev.site`.
+First touch per browser session. A small inline script in `<head>` stores the UTM parameters from the first tagged page in a session cookie called `gf_utm_attribution` (no expiry, `path=/`, `SameSite=Lax`, `Secure` on https). Later pages, tagged or not, never overwrite it. Values are trimmed and capped at 200 characters. A submission without the cookie stores empty values, and editing an entry keeps its original attribution.
 
-The boilerplate is setup so that the `plugin` directory is the root of your plugin. Don't rename this directory. That's where the development of your plugin will happen.
+The script is only printed when Gravity Forms is active.
 
-Under the hood composer will pull the latest WordPress version and install it in the `wordpress` directory. The `wordpress` directory is then set as the document root for ddev. Finally we mount the `plugin` directory to the `wp-content/plugins` directory in the WordPress installation.
+## Merge tags
+
+`{entry:utm_source}`, `{entry:utm_medium}`, `{entry:utm_campaign}`, `{entry:utm_term}` and `{entry:utm_content}` work in notifications and confirmations. Gravity Forms resolves `{entry:*}` from entry meta by itself. The plugin just lists these tags under "Custom" in the merge tag dropdown.
+
+## Local development
+
+```sh
+ddev start
+```
+
+WordPress runs at https://gf-utm-attribution.ddev.site (admin / admin), with `plugin/` mounted as the plugin. Gravity Forms is commercial, so it installs automatically only when `GF_LICENSE_KEY=...` is set in `.ddev/.env`, which is gitignored. Outgoing mail goes to Mailpit (`ddev mailpit`).
+
+## Tests
+
+```sh
+npm run test:unit   # node + php only: runs the real capture script and plugin PHP against WordPress stubs
+npm install && npx playwright install chromium --no-shell
+npm run test:e2e    # real browser against the ddev site; needs ddev running with Gravity Forms active
+npm test            # both
+```
+
+The e2e test creates its own form, page and entry, checks the entry meta and the notification email in Mailpit, and then deletes all of them.
+
+## Releasing
+
+1. Bump `Version:` in `plugin/plugin.php` and commit.
+2. Tag and push with a plain semver tag (no `v` prefix): `git tag 1.0.1 && git push origin 1.0.1`.
+
+`.github/workflows/release.yml` lints the PHP, runs the unit tests, builds `dist/gf-utm-attribution.zip` with `bin/build-release.sh`, and publishes a GitHub release with that zip attached. The build fails if the tag doesn't match the `Version:` header. To build locally, run `bin/build-release.sh 1.0.0`.
