@@ -1,16 +1,19 @@
-name: Release
+name: CI
 
 on:
   push:
+    branches:
+      - master
     tags:
       - '[0-9]+.[0-9]+.[0-9]+'
-
-permissions:
-  contents: write
+  pull_request:
 
 jobs:
-  release:
-    runs-on: ubuntu-latest
+  test:
+    # Both jobs pin ubuntu-24.04: ubuntu-latest moves to Ubuntu 26 on 2026-10-19, where preinstalled php and zip are not guaranteed.
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v7
 
@@ -19,6 +22,15 @@ jobs:
 
       - name: Unit tests
         run: node tests/capture.test.js
+
+  release:
+    needs: test
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
 
       - name: Build zip
         run: bin/build-release.sh "$GITHUB_REF_NAME"
